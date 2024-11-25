@@ -207,7 +207,6 @@ def save_predictions(images, masks, outputs, epoch, batch_idx, save_dir):
         plt.close()
 
 def main():
-    # Training settings
     BATCH_SIZE = 8
     LEARNING_RATE = 3e-4
     NUM_EPOCHS = 100
@@ -225,8 +224,6 @@ def main():
         A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ToTensorV2(),
     ])
-
-    # Create dataset
     print("Creating dataset...")
     try:
         dataset = AugmentedKITTIDataset(IMAGE_DIR, LABEL_DIR, transform=train_transform)
@@ -234,8 +231,6 @@ def main():
     except Exception as e:
         print(f"Failed to create dataset: {e}")
         return
-
-    # Create data loader
     train_loader = DataLoader(
         dataset, 
         batch_size=BATCH_SIZE, 
@@ -261,8 +256,6 @@ def main():
         steps_per_epoch=len(train_loader),
         pct_start=0.3
     )
-
-    # Training loop
     print("Starting training...")
     best_loss = float('inf')
     
