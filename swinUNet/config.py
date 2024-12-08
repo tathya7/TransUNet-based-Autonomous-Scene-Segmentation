@@ -88,7 +88,7 @@ _C.TRAIN.MIN_LR = 5e-6
 # Clip gradient norm
 _C.TRAIN.CLIP_GRAD = 5.0
 # Auto resume from latest checkpoint
-_C.TRAIN.AUTO_RESUME = True
+_C.TRAIN.AUTO_RESUME = False
 # Gradient accumulation steps
 # could be overwritten by command line argument
 _C.TRAIN.ACCUMULATION_STEPS = 0
@@ -219,11 +219,10 @@ def update_config(config, args):
     config.freeze()
 
 
-def get_config(args):
-    """Get a yacs CfgNode object with default values."""
-    # Return a clone so that the defaults will not be altered
-    # This is for the "local variable" use pattern
-    config = _C.clone()
-    update_config(config, args)
 
+def get_config(config_path):
+    config = _C.clone()
+    config.defrost()
+    config.merge_from_file(config_path)
+    config.freeze()
     return config
