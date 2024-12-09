@@ -45,7 +45,8 @@ class AugmentedKITTIDataset(Dataset):
                         
                     class_idx = self.class_mapping[class_name]
                     x1, y1, x2, y2 = map(float, parts[4:8])
-            
+                    
+                    # Convert to pixel coordinates
                     x1, x2 = max(0, int(x1)), min(original_w, int(x2))
                     y1, y2 = max(0, int(y1)), min(original_h, int(y2))
                     
@@ -60,26 +61,34 @@ class AugmentedKITTIDataset(Dataset):
         return mask
 
     def __getitem__(self, idx):
+        # Load image and label paths
         img_path = os.path.join(self.image_dir, self.image_filenames[idx])
-        label_path = os.path.join(self.label_dir, os.path.splitext(self.image_filenames[idx])[0] + '.txt')
-
+        label_path = os.path.join(self.label_dir,
+                                 os.path.splitext(self.image_filenames[idx])[0] + '.txt')
+        
+        # Read image
         image = cv2.imread(img_path)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         
+        # Create mask using original image dimensions
         mask = self.create_label_image(label_path, image.shape)
         
         if self.transform:
             try:
+                # Apply albumentations transforms
                 transformed = self.transform(image=image, mask=mask)
-                image = transformed['image'] 
-                mask = transformed['mask']   
+                image = transformed['image']  # This will be a tensor due to ToTensorV2
+                mask = transformed['mask']    # This will be a numpy array
                 
+                # Convert mask to tensor
                 if isinstance(mask, np.ndarray):
                     mask = torch.from_numpy(mask)
             except Exception as e:
                 print(f"Transform error on image {img_path}: {e}")
+                # Fallback processing
                 image = cv2.resize(image, (self.img_width, self.img_height))
-                mask = cv2.resize(mask, (self.img_width, self.img_height), interpolation=cv2.INTER_NEAREST)
+                mask = cv2.resize(mask, (self.img_width, self.img_height), 
+                                interpolation=cv2.INTER_NEAREST)
                 image = torch.from_numpy(image.transpose(2, 0, 1)).float() / 255.0
         else:
             image = cv2.resize(image, (self.img_width, self.img_height))
