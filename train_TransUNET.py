@@ -1,5 +1,7 @@
+import argparse
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 import albumentations as A
@@ -9,53 +11,45 @@ import cv2
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import os
-from AugmentedKITTIDataset import AugmentedKITTIDataset
 from networks.vit_seg_modeling import CONFIGS, VisionTransformer
+from AugmentedKITTIDataset_unet import AugmentedKITTIDataset
+from utils import (
+    calculate_class_weights,
+    MetricTracker,
+    save_metric_values,
+    plot_metrics,
+    save_per_class_iou,
+    save_predictions_with_metrics
+)
 
-BASE_DIR = "/afs/glue.umd.edu/home/glue/a/m/amishr17/home/.cache/kagglehub/datasets/klemenko/kitti-dataset/versions/1"
-IMAGE_DIR = os.path.join(BASE_DIR, "data_object_image_2/training/image_2/")
-LABEL_DIR = os.path.join(BASE_DIR, "data_object_label_2/training/label_2/")
-IMG_HEIGHT, IMG_WIDTH = 224, 224  
-NUM_CLASSES = 10  
+def parse_args():
+    default_base_dir = "/afs/glue.umd.edu/home/glue/a/m/amishr17/home/.cache/kagglehub/datasets/klemenko/kitti-dataset/versions/1"
+    parser = argparse.ArgumentParser(description='TransUNet Training for KITTI Dataset')
+    
+    parser.add_argument('--base-dir', type=str, default=default_base_dir, help='Base directory for KITTI dataset')
+    parser.add_argument('--img-height', type=int, default=224, help='Input image height (default: 224)')
+    parser.add_argument('--img-width', type=int, default=224, help='Input image width (default: 224)')
+    parser.add_argument('--num-classes', type=int, default=10, help='Number of segmentation classes (default: 10)')
+    parser.add_argument('--epochs', type=int, default=300, help='Number of training epochs (default: 100)')
+    parser.add_argument('--batch-size', type=int, default=8, help='Training batch size (default: 8)')
+    parser.add_argument('--lr', type=float, default=1e-4, help='Learning rate (default: 3e-4)')
+    parser.add_argument('--val-split', type=float, default=0.1, help='Validation split ratio (default: 0.1)')
+    parser.add_argument('--save-dir', type=str, default='transunet_results', help='Directory to save results (default: transunet_results)')
+    
+    return parser.parse_args()
 
-def get_transunet_model(num_classes):
+def get_transunet_model(img_height, img_width, num_classes):
     config_vit = CONFIGS['R50-ViT-B_16']
     config_vit.n_classes = num_classes
     config_vit.n_skip = 3
-    config_vit.patches.grid = (int(IMG_HEIGHT/16), int(IMG_WIDTH/16))
-    model = VisionTransformer(config_vit, img_size=IMG_HEIGHT, num_classes=num_classes)
+    config_vit.patches.grid = (int(img_height/16), int(img_width/16))
+    model = VisionTransformer(config_vit, img_size=img_height, num_classes=num_classes)
     return model
 
-
-def calculate_class_weights(dataset, num_classes, batch_size=32):
-    print("Calculating class weights (this may take a few minutes)...")
-    loader = DataLoader(
-        dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=4,
-        pin_memory=True
-    )
-    
-    class_counts = torch.zeros(num_classes)
-    
-    for batch in tqdm(loader, desc="Computing class weights"):
-        if isinstance(batch, (tuple, list)):
-            _, masks = batch    
-        for i in range(num_classes):
-            class_counts[i] += (masks == i).sum().item()
-    total = class_counts.sum()
-    weights = total / (class_counts + 1e-6)
-    weights = weights / weights.sum()
-    print("\nClass distribution:")
-    for i in range(num_classes):
-        print(f"Class {i}: {class_counts[i]} pixels ({(class_counts[i]/total)*100:.2f}%)")
-    
-    return weights
-
-def train_epoch(model, train_loader, criterion, optimizer, scheduler, device, epoch, save_dir):
+def train_epoch(model, train_loader, criterion, optimizer, scheduler, device, epoch, save_dir, metric_tracker):
     model.train()
     epoch_loss = 0
+    metric_tracker.reset()
     
     with tqdm(train_loader, desc=f"Epoch {epoch+1}") as pbar:
         for batch_idx, (images, masks) in enumerate(pbar):
@@ -68,45 +62,72 @@ def train_epoch(model, train_loader, criterion, optimizer, scheduler, device, ep
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                 optimizer.step()
-                scheduler.step()
+                
                 epoch_loss += loss.item()
-                pbar.set_postfix({'loss': f'{loss.item():.4f}'})
+                pred = outputs.argmax(dim=1)
+                for i in range(pred.shape[0]):
+                    pred_mask = torch.zeros(outputs.shape[1], *pred[i].shape, device=device)
+                    pred_mask.scatter_(0, pred[i].unsqueeze(0), 1)
+                    target_mask = F.one_hot(masks[i], num_classes=outputs.shape[1])
+                    target_mask = target_mask.permute(2, 0, 1).float().to(device)
+                    
+                    metric_tracker.update(pred_mask, target_mask)
+                
+                current_metrics = metric_tracker.get_metrics()
+                pbar.set_postfix({
+                    'loss': f'{loss.item():.4f}',
+                    'dice': f'{current_metrics["dice_mean"]:.4f}',
+                    'miou': f'{current_metrics["miou"]:.4f}'
+                })
+                
                 if batch_idx % 50 == 0:
-                    save_predictions(images, masks, outputs, epoch, batch_idx, save_dir)     
+                    save_predictions_with_metrics(
+                        images, masks, outputs, current_metrics,
+                        epoch, batch_idx, save_dir, outputs.shape[1]
+                    )
+                    
             except Exception as e:
                 print(f"Error in batch {batch_idx}: {e}")
                 continue
+                
+        scheduler.step()
     
-    return epoch_loss / len(train_loader)
+    return epoch_loss / len(train_loader), metric_tracker.get_metrics()
 
-def save_predictions(images, masks, outputs, epoch, batch_idx, save_dir):
+def validate(model, val_loader, criterion, device, metric_tracker):
+    model.eval()
+    val_loss = 0
+    metric_tracker.reset()
+    
     with torch.no_grad():
-        pred = outputs.argmax(dim=1)
-        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-        
-        img_display = images[0].cpu().permute(1, 2, 0).numpy()
-        img_display = img_display * np.array([0.229, 0.224, 0.225]) + np.array([0.485, 0.456, 0.406])
-        axes[0].imshow(np.clip(img_display, 0, 1))
-        axes[0].set_title('Image')
-        axes[0].axis('off')
-        axes[1].imshow(masks[0].cpu(), cmap='tab10', vmin=0, vmax=NUM_CLASSES-1)
-        axes[1].set_title('Ground Truth')
-        axes[1].axis('off')
-        axes[2].imshow(pred[0].cpu(), cmap='tab10', vmin=0, vmax=NUM_CLASSES-1)
-        axes[2].set_title('Prediction')
-        axes[2].axis('off')
-        plt.savefig(f'{save_dir}/epoch_{epoch+1}_batch_{batch_idx}.png')
-        plt.close()
+        for images, masks in val_loader:
+            images = images.to(device)
+            masks = masks.to(device)
+            outputs = model(images)
+            loss = criterion(outputs, masks)
+            val_loss += loss.item()
+            
+            pred = outputs.argmax(dim=1)
+            for i in range(pred.shape[0]):
+                pred_mask = torch.zeros(outputs.shape[1], *pred[i].shape, device=device)
+                pred_mask.scatter_(0, pred[i].unsqueeze(0), 1)
+                target_mask = F.one_hot(masks[i], num_classes=outputs.shape[1])
+                target_mask = target_mask.permute(2, 0, 1).float().to(device)
+                
+                metric_tracker.update(pred_mask, target_mask)
+    
+    return val_loss / len(val_loader), metric_tracker.get_metrics()
 
 def main():
-    BATCH_SIZE = 8
-    LEARNING_RATE = 3e-4
-    NUM_EPOCHS = 100
+
+    args = parse_args()
+    IMAGE_DIR = os.path.join(args.base_dir, "data_object_image_2/training/image_2/")
+    LABEL_DIR = os.path.join(args.base_dir, "data_object_label_2/training/label_2/")
+    os.makedirs(args.save_dir, exist_ok=True)
     
     print("Setting up training...")
-
     train_transform = A.Compose([
-        A.Resize(IMG_HEIGHT, IMG_WIDTH),
+        A.Resize(args.img_height, args.img_width),
         A.OneOf([
             A.RandomBrightnessContrast(p=0.8),
             A.RandomGamma(p=0.8),
@@ -116,61 +137,133 @@ def main():
         A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ToTensorV2(),
     ])
-
-    # Create dataset
-    print("Creating dataset...")
+    
+    val_transform = A.Compose([
+        A.Resize(args.img_height, args.img_width),
+        A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ToTensorV2(),
+    ])
+    
+    print("Creating datasets...")
     try:
-        dataset = AugmentedKITTIDataset(IMAGE_DIR, LABEL_DIR, transform=train_transform)
-        print(f"Dataset created successfully with {len(dataset)} samples")
+        full_dataset = AugmentedKITTIDataset(
+            IMAGE_DIR, 
+            LABEL_DIR, 
+            transform=train_transform,
+            img_height=args.img_height,
+            img_width=args.img_width
+        )
+        
+        dataset_size = len(full_dataset)
+        val_size = int(args.val_split * dataset_size)
+        train_size = dataset_size - val_size
+        
+        # Create train/val splits
+        generator = torch.Generator().manual_seed(42)
+        train_dataset, val_dataset = torch.utils.data.random_split(
+            full_dataset, [train_size, val_size], generator=generator
+        )
+        
+        print(f"Dataset created successfully with {train_size} training and {val_size} validation samples")
     except Exception as e:
         print(f"Failed to create dataset: {e}")
         return
 
-    # Create data loader
-    train_loader = DataLoader(
-        dataset, 
-        batch_size=BATCH_SIZE, 
-        shuffle=True, 
-        num_workers=4,
-        pin_memory=True
-    )
-    print(f"DataLoader created with {len(train_loader)} batches")
+    train_loader = DataLoader(train_dataset,batch_size=args.batch_size,shuffle=True,num_workers=4,pin_memory=True)
+    val_loader = DataLoader(val_dataset,batch_size=args.batch_size,shuffle=False,num_workers=4,pin_memory=True)
+    
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
-    save_dir = "transunet_results"
-    os.makedirs(save_dir, exist_ok=True)
-    print("Initializing TransUNET model...")
-    model = get_transunet_model(NUM_CLASSES).to(device)
-    weights = calculate_class_weights(dataset, NUM_CLASSES)
+    
+    print("Initializing TransUNet model...")
+    model = get_transunet_model(
+        args.img_height, 
+        args.img_width, 
+        args.num_classes
+    ).to(device)
+    
+
+    weights = calculate_class_weights(train_dataset, args.num_classes)
     print("Class weights calculated:", weights.numpy())
+    
     criterion = nn.CrossEntropyLoss(weight=weights.to(device))
-    optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=0.01)
+    optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.01)
     scheduler = optim.lr_scheduler.OneCycleLR(
         optimizer,
-        max_lr=3e-4,
-        epochs=NUM_EPOCHS,
+        max_lr=args.lr,
+        epochs=args.epochs,
         steps_per_epoch=len(train_loader),
         pct_start=0.3
     )
+    
 
-    # Training loop
+    metric_tracker = MetricTracker(args.num_classes)
+    metrics_history = {
+        'train_loss': [], 'val_loss': [],
+        'train_dice_mean': [], 'val_dice_mean': [],
+        'train_iou_mean': [], 'val_iou_mean': [],
+        'train_f1_mean': [], 'val_f1_mean': [],
+        'train_dice_overlap_mean': [], 'val_dice_overlap_mean': [],
+        'train_miou': [], 'val_miou': []
+    }
+    per_class_iou_history = []
+    
     print("Starting training...")
     best_loss = float('inf')
+    best_miou = 0.0
     
-    for epoch in range(NUM_EPOCHS):
-        avg_loss = train_epoch(model, train_loader, criterion, optimizer, scheduler, device, epoch, save_dir)
-        print(f'Epoch {epoch+1}/{NUM_EPOCHS}, Average Loss: {avg_loss:.4f}')
+    for epoch in range(args.epochs):
+        train_loss, train_metrics = train_epoch(
+            model, train_loader, criterion, optimizer,
+            scheduler, device, epoch, args.save_dir, metric_tracker
+        )
         
-        if avg_loss < best_loss:
-            best_loss = avg_loss
+        val_loss, val_metrics = validate(
+            model, val_loader, criterion, device, metric_tracker
+        )
+        
+      
+        for key in ['dice_mean', 'iou_mean', 'f1_mean', 
+                   'dice_overlap_mean', 'miou']:
+            metrics_history[f'train_{key}'].append(train_metrics[key])
+            metrics_history[f'val_{key}'].append(val_metrics[key])
+        metrics_history['train_loss'].append(train_loss)
+        metrics_history['val_loss'].append(val_loss)
+        per_class_iou_history.append(val_metrics['per_class_iou'])
+        
+        # Print epoch results
+        print(f'\nEpoch {epoch+1}/{args.epochs}')
+        print(f'Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}')
+        print(f'Train Metrics: Dice={train_metrics["dice_mean"]:.4f}, '
+              f'IoU={train_metrics["iou_mean"]:.4f}, '
+              f'F1={train_metrics["f1_mean"]:.4f}, '
+              f'Dice Overlap={train_metrics["dice_overlap_mean"]:.2f}%, '
+              f'mIoU={train_metrics["miou"]:.4f}')
+        print(f'Val Metrics: Dice={val_metrics["dice_mean"]:.4f}, '
+              f'IoU={val_metrics["iou_mean"]:.4f}, '
+              f'F1={val_metrics["f1_mean"]:.4f}, '
+              f'Dice Overlap={val_metrics["dice_overlap_mean"]:.2f}%, '
+              f'mIoU={val_metrics["miou"]:.4f}')
+        
+        if val_loss < best_loss or val_metrics['miou'] > best_miou:
+            best_loss = min(val_loss, best_loss)
+            best_miou = max(val_metrics['miou'], best_miou)
             torch.save({
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
+                'scheduler_state_dict': scheduler.state_dict(),
                 'loss': best_loss,
-            }, f'{save_dir}/best_model.pth')
-            print(f'Saved new best model with loss: {best_loss:.4f}')
+                'miou': best_miou,
+                'metrics': val_metrics
+            }, f'{args.save_dir}/best_model.pth')
+            print(f'Saved new best model with loss: {best_loss:.4f} '
+                  f'and mIoU: {best_miou:.4f}')
 
+    plot_metrics(metrics_history, args.save_dir)
+    save_metric_values(metrics_history, args.save_dir)
+    save_per_class_iou(per_class_iou_history, args.num_classes, args.save_dir)
+    
     print("Training completed!")
 
 if __name__ == "__main__":
