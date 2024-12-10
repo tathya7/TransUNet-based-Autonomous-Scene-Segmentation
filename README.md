@@ -12,6 +12,18 @@ This project implements automatic scene segmentation using  deep learning archit
 - **Supports training and inference** on custom datasets.
 - **GPU acceleration** for faster computations.
 
+### Dataset
+
+```
+import kagglehub
+
+
+path = kagglehub.dataset_download("klemenko/kitti-dataset")
+print("Path to model files:", path)
+```
+**On the Terminal, this code will depict the Path to the dataset:**
+
+
 ### File Structure
 
 ```
