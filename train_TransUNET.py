@@ -8,7 +8,6 @@ import albumentations as A
 from albumentations.pytorch import ToTensorV2
 import numpy as np
 import cv2
-import matplotlib.pyplot as plt
 from tqdm import tqdm
 import os
 from networks.vit_seg_modeling import CONFIGS, VisionTransformer
@@ -23,6 +22,27 @@ from utils import (
 )
 
 def parse_args():
+    """
+    Parse command line arguments, for training SwinUnet on KITTI dataset
+
+    @param
+    --base-dir: Base directory for KITTI dataset
+    --img-height: Input image height
+    --img-width: Input image width
+    --num-classes: Number of segmentation classes
+    --epochs: Number of training epochs
+    --batch-size: Training batch size
+    --lr: Learning rate
+    --val-split: Validation split ratio
+    --config-path: Path to model configuration file
+    --embed-dim: Embedding dimension
+    --checkpoint-freq: Checkpoint saving frequency in epochs
+    --save-dir: Directory to save results
+    
+    @return
+    args: Parsed command line arguments
+    
+    """
     default_base_dir = "/afs/glue.umd.edu/home/glue/a/m/amishr17/home/.cache/kagglehub/datasets/klemenko/kitti-dataset/versions/1"
     parser = argparse.ArgumentParser(description='TransUNet Training for KITTI Dataset')
     
@@ -39,6 +59,17 @@ def parse_args():
     return parser.parse_args()
 
 def get_transunet_model(img_height, img_width, num_classes):
+    """
+    Initialize TransUNet model for segmentation
+
+    @param
+    img_height: Input image height
+    img_width: Input image width
+    num_classes: Number of segmentation classes
+
+    @return
+    model: TransUNet model
+    """
     config_vit = CONFIGS['R50-ViT-B_16']
     config_vit.n_classes = num_classes
     config_vit.n_skip = 3
@@ -47,6 +78,25 @@ def get_transunet_model(img_height, img_width, num_classes):
     return model
 
 def train_epoch(model, train_loader, criterion, optimizer, scheduler, device, epoch, save_dir, metric_tracker):
+    """
+    Train model for one epoch
+
+    @param
+    model: SwinUnet model
+    train_loader: DataLoader for training dataset
+    criterion: Loss function - CrossEntropyLoss
+    optimizer: Optimizer - AdamW
+    scheduler: Learning rate scheduler - OneCycleLR
+    device: Device to run model on
+    epoch: Current epoch number
+    save_dir: Directory to save predictions
+    metric_tracker: Object to track metrics
+
+    @return
+    epoch_loss: Average loss for the epoch
+    metric_tracker.get_metrics(): Metrics for the epoch
+
+    """
     model.train()
     epoch_loss = 0
     metric_tracker.reset()
@@ -80,7 +130,7 @@ def train_epoch(model, train_loader, criterion, optimizer, scheduler, device, ep
                     'miou': f'{current_metrics["miou"]:.4f}'
                 })
                 
-                if batch_idx % 50 == 0:
+                if batch_idx % 500 == 0:
                     save_predictions_with_metrics(
                         images, masks, outputs, current_metrics,
                         epoch, batch_idx, save_dir, outputs.shape[1]
@@ -95,6 +145,21 @@ def train_epoch(model, train_loader, criterion, optimizer, scheduler, device, ep
     return epoch_loss / len(train_loader), metric_tracker.get_metrics()
 
 def validate(model, val_loader, criterion, device, metric_tracker):
+    """
+     Validate model on validation dataset
+
+    @param
+    model: SwinUnet model
+    val_loader: DataLoader for validation dataset
+    criterion: Loss function - CrossEntropyLoss
+    device: Device to run model on
+    metric_tracker: Object to track metrics
+
+    @return
+    val_loss: Average loss on validation dataset
+    metric_tracker.get_metrics(): Metrics on validation dataset
+
+    """
     model.eval()
     val_loss = 0
     metric_tracker.reset()
@@ -119,6 +184,35 @@ def validate(model, val_loader, criterion, device, metric_tracker):
     return val_loss / len(val_loader), metric_tracker.get_metrics()
 
 def main():
+    """
+     Main function to train SwinUnet on KITTI dataset
+
+    @param
+    args: Command line arguments
+    image_dir: Directory containing KITTI images
+    label_dir: Directory containing KITTI labels
+    device: Device to run model on
+    dataset: AugmentedKITTIDataset object
+    dataset_size: Size of dataset
+    val_size: Size of validation dataset
+    train_size: Size of training dataset
+    train_loader: DataLoader for training dataset
+    val_loader: DataLoader for validation dataset
+    model: SwinUnet model
+    weights: Class weights for loss function
+    criterion: Loss function - CrossEntropyLoss
+    optimizer: Optimizer - AdamW
+    scheduler: Learning rate scheduler - OneCycleLR
+    metric_tracker: Object to track metrics
+    metrics_history: Dictionary to store metrics history
+    per_class_iou_history: List to store per class IoU history
+    best_loss: Best validation loss
+    best_miou: Best mIoU
+
+    @return
+    None
+
+    """
 
     args = parse_args()
     IMAGE_DIR = os.path.join(args.base_dir, "data_object_image_2/training/image_2/")
@@ -128,10 +222,7 @@ def main():
     print("Setting up training...")
     train_transform = A.Compose([
         A.Resize(args.img_height, args.img_width),
-        A.OneOf([
-            A.RandomBrightnessContrast(p=0.8),
-            A.RandomGamma(p=0.8),
-        ], p=0.5),
+        A.OneOf([A.RandomBrightnessContrast(p=0.8),A.RandomGamma(p=0.8),], p=0.5),
         A.HorizontalFlip(p=0.5),
         A.ShiftScaleRotate(shift_limit=0.1, scale_limit=0.2, rotate_limit=15, p=0.5),
         A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
@@ -144,7 +235,6 @@ def main():
         ToTensorV2(),
     ])
     
-    print("Creating datasets...")
     try:
         full_dataset = AugmentedKITTIDataset(
             IMAGE_DIR, 
@@ -158,7 +248,7 @@ def main():
         val_size = int(args.val_split * dataset_size)
         train_size = dataset_size - val_size
         
-        # Create train/val splits
+    
         generator = torch.Generator().manual_seed(42)
         train_dataset, val_dataset = torch.utils.data.random_split(
             full_dataset, [train_size, val_size], generator=generator
@@ -169,34 +259,21 @@ def main():
         print(f"Failed to create dataset: {e}")
         return
 
-    train_loader = DataLoader(train_dataset,batch_size=args.batch_size,shuffle=True,num_workers=4,pin_memory=True)
+    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4,pin_memory=True)
     val_loader = DataLoader(val_dataset,batch_size=args.batch_size,shuffle=False,num_workers=4,pin_memory=True)
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
     
     print("Initializing TransUNet model...")
-    model = get_transunet_model(
-        args.img_height, 
-        args.img_width, 
-        args.num_classes
-    ).to(device)
-    
-
+    model = get_transunet_model(args.img_height,  args.img_width, args.num_classes).to(device)
     weights = calculate_class_weights(train_dataset, args.num_classes)
     print("Class weights calculated:", weights.numpy())
     
     criterion = nn.CrossEntropyLoss(weight=weights.to(device))
     optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.01)
-    scheduler = optim.lr_scheduler.OneCycleLR(
-        optimizer,
-        max_lr=args.lr,
-        epochs=args.epochs,
-        steps_per_epoch=len(train_loader),
-        pct_start=0.3
-    )
+    scheduler = optim.lr_scheduler.OneCycleLR( optimizer,max_lr=args.lr,epochs=args.epochs,steps_per_epoch=len(train_loader),pct_start=0.3)
     
-
     metric_tracker = MetricTracker(args.num_classes)
     metrics_history = {
         'train_loss': [], 'val_loss': [],
@@ -213,16 +290,9 @@ def main():
     best_miou = 0.0
     
     for epoch in range(args.epochs):
-        train_loss, train_metrics = train_epoch(
-            model, train_loader, criterion, optimizer,
-            scheduler, device, epoch, args.save_dir, metric_tracker
-        )
+        train_loss, train_metrics = train_epoch(model, train_loader, criterion, optimizer,scheduler, device, epoch, args.save_dir, metric_tracker)
+        val_loss, val_metrics = validate(model, val_loader, criterion, device, metric_tracker)
         
-        val_loss, val_metrics = validate(
-            model, val_loader, criterion, device, metric_tracker
-        )
-        
-      
         for key in ['dice_mean', 'iou_mean', 'f1_mean', 
                    'dice_overlap_mean', 'miou']:
             metrics_history[f'train_{key}'].append(train_metrics[key])
@@ -231,7 +301,6 @@ def main():
         metrics_history['val_loss'].append(val_loss)
         per_class_iou_history.append(val_metrics['per_class_iou'])
         
-        # Print epoch results
         print(f'\nEpoch {epoch+1}/{args.epochs}')
         print(f'Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}')
         print(f'Train Metrics: Dice={train_metrics["dice_mean"]:.4f}, '
