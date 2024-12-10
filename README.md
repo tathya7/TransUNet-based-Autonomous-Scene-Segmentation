@@ -1,10 +1,10 @@
 # Automatic Scene Segmentation using UNET architectures. 
 
 
-### Overview 
+## Overview 
 This project implements automatic scene segmentation using  deep learning architectures: UNET CNN, Transformer-UNET, and Swin Transformer UNET. It aims to provide accurate pixel-wise segmentation for applications in medical imaging, autonomous vehicles, and urban planning. Our aim is to compare and predict the hypothesis if Transformers are better than Convolution Neural Networks or not.
 
-### Key Features 
+## Key Features 
 
 - **Implements traditional UNET** for pixel-wise segmentation.
 - **Integrates Transformer-UNET** to enhance global feature learning.
@@ -12,7 +12,7 @@ This project implements automatic scene segmentation using  deep learning archit
 - **Supports training and inference** on custom datasets.
 - **GPU acceleration** for faster computations.
 
-### File Structure
+## File Structure
 
 ```
 ├── data/     
@@ -36,7 +36,7 @@ This project implements automatic scene segmentation using  deep learning archit
 
 ## To run the scripts
 
-### Requirements - Libraries
+## Requirements - Libraries
 ```
 python==3.12.0
 torch>=1.10.0
@@ -49,7 +49,7 @@ tqdm>=4.60.0
 kagglehub
 ```
 
-### Dataset
+## Dataset
 
 ```
 import kagglehub
@@ -63,7 +63,7 @@ print("Path to model files:", path)
 
 ## Command Line Instructions to run 
 
-## INSTALL CONDA/MINICONDA and follow the below process -
+### INSTALL CONDA/MINICONDA and follow the below process -
 
 **1. Activate Conda Environment**
 
