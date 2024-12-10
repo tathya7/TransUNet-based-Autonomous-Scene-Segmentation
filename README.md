@@ -15,13 +15,19 @@ This project implements automatic scene segmentation using  deep learning archit
 ### File Structure
 
 ```
-├── data/                  # Dataset directory
-├── models/                # Model architectures
-│   ├── unet.py
-│   ├── transformer_unet.py
-│   └── swin_unet.py
-├── utils/                 # Utility scripts
-├── train.py               # Training script
+├── data/     
+├── networks/              
+│   ├── swin_transformer_unet_skip_expand_decoder_sys.py
+│   ├── UNet.py
+│   ├── UNetparts.py
+|   ├── vision_transformer.py
+|   ├── vit_segs_config.py
+|   ├── vit_segs_modelling.py
+|   ├── vit_segs_modelling_resnet_skip.py
+├── utils.py
+├── train_UNET_Cnn.py               # Training UNET CNN script
+├── train_Transunet.py              # Training TransUNET script
+├── train_sswinUNET.py               # Training SwinTransUNET script
 ├── inference.py           # Inference script
 ├── requirements.txt       # Dependency list
 └── README.md              # Project documentation
