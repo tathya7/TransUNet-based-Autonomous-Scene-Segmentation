@@ -3,6 +3,20 @@ import torch.nn as nn
 from networks.UNetparts import DoubleConv, DownSample, upsample
 
 class IUNet(nn.Module):
+    """
+    UNet model with 4 down and 4 up
+
+    Args:
+    in_channels (int): Number of input channels
+    num_classes (int): Number of output classes
+    DownSample (nn.Module): Downsample block
+    DoubleConv (nn.Module): Double convolution block
+    upsample (nn.Module): Upsample block
+    bottleneck (nn.Module): Bottleneck block
+
+    Returns:
+    nn.Module: UNet model
+    """
     def __init__(self, in_channels, num_classes):
             super().__init__()
             self.down_conv_1 = DownSample(in_channels, 64)
@@ -18,9 +32,22 @@ class IUNet(nn.Module):
             self.up_conv_4 = upsample(128, 64)
 
             self.out = nn.Conv2d(in_channels=64, out_channels=num_classes, kernel_size=1)
-        #     self.out = nn.Conv2d(in_channels=64, out_channels=num_classes, kernel_size=1)
 
     def forward(self, x):
+        """
+        Forward pass
+
+        Args:
+        x (torch.Tensor): Input tensor
+        down_1, p1 (torch.Tensor): Output and pooling layer from downsample 1
+        down_2, p2 (torch.Tensor): Output and pooling layer from downsample 2
+        down_3, p3 (torch.Tensor): Output and pooling layer from downsample 3
+        down_4, p4 (torch.Tensor): Output and pooling layer from downsample 4
+        b (torch.Tensor): Output from bottleneck
+        
+        Returns: 
+        out (torch.Tensor): Output tensor
+        """
         down_1, p1 = self.down_conv_1(x)
         down_2, p2 = self.down_conv_2(p1)
         down_3, p3 = self.down_conv_3(p2)
@@ -36,13 +63,5 @@ class IUNet(nn.Module):
         out = self.out(up_4)
         return out
 
-# if __name__ == "__main__":
-#     double_conv = DoubleConv(256, 256)
-#     print(double_conv)
-
-#     input = torch.rand((1, 3, 512, 512))
-#     model = UNet(3, 10)
-#     output = model(input)
-#     print(output.size())
 
 
