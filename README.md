@@ -61,9 +61,9 @@ print("Path to model files:", path)
 **On the Terminal, this code will depict the Path to the dataset:**
 
 
-### Command Line Instructions to run 
+## Command Line Instructions to run 
 
-### INSTALL CONDA/MINICONDA and follow the below process -
+## INSTALL CONDA/MINICONDA and follow the below process -
 
 **1. Activate Conda Environment**
 
