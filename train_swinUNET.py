@@ -24,6 +24,26 @@ from utils import (
 )
 
 def parse_args():
+    """
+    Parse command line arguments, for training SwinUnet on KITTI dataset
+
+    @param
+    --base-dir: Base directory for KITTI dataset
+    --img-height: Input image height
+    --img-width: Input image width
+    --num-classes: Number of segmentation classes
+    --epochs: Number of training epochs
+    --batch-size: Training batch size
+    --lr: Learning rate
+    --val-split: Validation split ratio
+    --config-path: Path to model configuration file
+    --embed-dim: Embedding dimension
+    --checkpoint-freq: Checkpoint saving frequency in epochs
+    --save-dir: Directory to save results
+
+    @return
+    args: Parsed command line arguments
+    """
     default_base_dir = "/afs/glue.umd.edu/home/glue/a/m/amishr17/home/.cache/kagglehub/datasets/klemenko/kitti-dataset/versions/1"
     parser = argparse.ArgumentParser(description='SwinUnet Training for KITTI Dataset')
     parser.add_argument('--base-dir', type=str, default=default_base_dir,help='Base directory for KITTI dataset')
@@ -44,6 +64,24 @@ def parse_args():
     return parser.parse_args()
 
 def train_epoch(model, train_loader, criterion, optimizer, scheduler, device, epoch, save_dir, metric_tracker):
+    """
+    Train model for one epoch
+
+    @param
+    model: SwinUnet model
+    train_loader: DataLoader for training dataset
+    criterion: Loss function - CrossEntropyLoss
+    optimizer: Optimizer - AdamW
+    scheduler: Learning rate scheduler - OneCycleLR
+    device: Device to run model on
+    epoch: Current epoch number
+    save_dir: Directory to save predictions
+    metric_tracker: Object to track metrics
+
+    @return
+    epoch_loss: Average loss for the epoch
+    metric_tracker.get_metrics(): Metrics for the epoch
+    """
     model.train()
     epoch_loss = 0
     metric_tracker.reset()
@@ -84,6 +122,20 @@ def train_epoch(model, train_loader, criterion, optimizer, scheduler, device, ep
     return epoch_loss / len(train_loader), metric_tracker.get_metrics()
 
 def validate(model, val_loader, criterion, device, metric_tracker):
+    """
+    Validate model on validation dataset
+
+    @param
+    model: SwinUnet model
+    val_loader: DataLoader for validation dataset
+    criterion: Loss function - CrossEntropyLoss
+    device: Device to run model on
+    metric_tracker: Object to track metrics
+
+    @return
+    val_loss: Average loss on validation dataset
+    metric_tracker.get_metrics(): Metrics on validation dataset
+    """
     model.eval()
     val_loss = 0
     metric_tracker.reset()
@@ -109,6 +161,21 @@ def validate(model, val_loader, criterion, device, metric_tracker):
     return val_loss / len(val_loader), metric_tracker.get_metrics()
 
 def setup_model(args, device):
+    """
+    Setup SwinUnet model
+
+    @param
+    args: Command line arguments
+    Embed_dim: Embedding dimension
+    Swin depths: Number of layers in each stage of Swin Transformer
+    Decoder depths: Number of layers in each stage of Decoder
+    Num heads: Number of attention heads in each stage of Swin Transformer
+    Drop path rate: Dropout rate for DropPath layers
+    device: Device to run model on
+
+    @return
+    model: SwinUnet model
+    """
     config = get_config(args.config_path)
     config.defrost()
     config.MODEL.SWIN.EMBED_DIM = args.embed_dim
@@ -127,6 +194,34 @@ def setup_model(args, device):
     return model
 
 def main():
+    """
+    Main function to train SwinUnet on KITTI dataset
+
+    @param
+    args: Command line arguments
+    image_dir: Directory containing KITTI images
+    label_dir: Directory containing KITTI labels
+    device: Device to run model on
+    dataset: AugmentedKITTIDataset object
+    dataset_size: Size of dataset
+    val_size: Size of validation dataset
+    train_size: Size of training dataset
+    train_loader: DataLoader for training dataset
+    val_loader: DataLoader for validation dataset
+    model: SwinUnet model
+    weights: Class weights for loss function
+    criterion: Loss function - CrossEntropyLoss
+    optimizer: Optimizer - AdamW
+    scheduler: Learning rate scheduler - OneCycleLR
+    metric_tracker: Object to track metrics
+    metrics_history: Dictionary to store metrics history
+    per_class_iou_history: List to store per class IoU history
+    best_loss: Best validation loss
+    best_miou: Best mIoU
+
+    @return
+    None
+    """
     args = parse_args()
 
     os.makedirs(args.save_dir, exist_ok=True)
@@ -134,9 +229,7 @@ def main():
     label_dir = os.path.join(args.base_dir, "data_object_label_2/training/label_2/")
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    dataset = AugmentedKITTIDataset(
-        image_dir,
-        label_dir,
+    dataset = AugmentedKITTIDataset(image_dir,label_dir,
         transform=transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         img_height=args.img_height,
         img_width=args.img_width
