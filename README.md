@@ -24,6 +24,7 @@ numpy>=1.21.0
 opencv-python>=4.5.0
 matplotlib>=3.4.0
 tqdm>=4.60.0
+kagglehub
 ```
 
 ### Dataset
