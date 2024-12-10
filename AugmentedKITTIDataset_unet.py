@@ -5,6 +5,19 @@ import torch
 import numpy as np
 
 class AugmentedKITTIDataset(Dataset):
+    """
+    KITTI dataset with image and label directories
+
+    Args:
+    image_dir (str): Path to image directory
+    label_dir (str): Path to label directory
+    transform (albumentations.Compose): Albumentations transforms
+    img_height (int): Image height
+    img_width (int): Image width
+
+    Returns:
+    torch.utils.data.Dataset: Dataset class
+    """
     def __init__(self, image_dir, label_dir, transform=None, img_height=224, img_width=224):
         self.image_dir = image_dir
         self.label_dir = label_dir
@@ -26,9 +39,22 @@ class AugmentedKITTIDataset(Dataset):
         }
 
     def __len__(self):
+        """
+        FOr Getting the length of dataset
+        """
         return len(self.image_filenames)
 
     def create_label_image(self, label_path, original_image_shape):
+        """
+        Create a class index mask from KITTI format label file
+
+        Args:
+        label_path (str): Path to label file
+        original_image_shape (tuple): Original image dimensions
+
+        Returns:
+        np.ndarray: Class index mask
+        """
         original_h, original_w = original_image_shape[:2]
         mask = np.zeros((original_h, original_w), dtype=np.int32)
         
@@ -45,7 +71,6 @@ class AugmentedKITTIDataset(Dataset):
                         
                     class_idx = self.class_mapping[class_name]
                     x1, y1, x2, y2 = map(float, parts[4:8])
-            
                     x1, x2 = max(0, int(x1)), min(original_w, int(x2))
                     y1, y2 = max(0, int(y1)), min(original_h, int(y2))
                     
@@ -60,12 +85,28 @@ class AugmentedKITTIDataset(Dataset):
         return mask
 
     def __getitem__(self, idx):
+        """
+        Get image and label at index
+
+        Args:
+        idx (int): Index
+        img_path (str): Path to image file
+        label_path (str): Path to label file
+        image (np.ndarray): Image array
+        mask (np.ndarray): Label mask array
+        transformed (dict): Transformed image and mask
+
+        Returns:
+        torch.Tensor: Transformed image
+        torch.Tensor: Transformed mask
+        """
         img_path = os.path.join(self.image_dir, self.image_filenames[idx])
-        label_path = os.path.join(self.label_dir, os.path.splitext(self.image_filenames[idx])[0] + '.txt')
+        label_path = os.path.join(self.label_dir,
+                                 os.path.splitext(self.image_filenames[idx])[0] + '.txt')
+        
 
         image = cv2.imread(img_path)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        
         mask = self.create_label_image(label_path, image.shape)
         
         if self.transform:
@@ -73,7 +114,6 @@ class AugmentedKITTIDataset(Dataset):
                 transformed = self.transform(image=image, mask=mask)
                 image = transformed['image'] 
                 mask = transformed['mask']   
-                
                 if isinstance(mask, np.ndarray):
                     mask = torch.from_numpy(mask)
             except Exception as e:
