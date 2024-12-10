@@ -62,7 +62,9 @@ print("Path to model files:", path)
 
 
 ### Command Line Instructions to run 
-##INSTALL CONDA/MINICONDA and follow the below process -
+
+### INSTALL CONDA/MINICONDA and follow the below process -
+
 **1. Activate Conda Environment**
 
 ```
