@@ -6,6 +6,19 @@ import numpy as np
 from torchvision import transforms
 
 class AugmentedKITTIDataset(Dataset):
+    """
+    KITTI dataset with image and label directories
+
+    Args:
+    image_dir (str): Path to image directory
+    label_dir (str): Path to label directory
+    transform (albumentations.Compose): Albumentations transforms
+    img_height (int): Image height
+    img_width (int): Image width
+
+    Returns:
+    torch.utils.data.Dataset: Dataset class
+    """
     def __init__(self, image_dir, label_dir, transform=None, img_height=224, img_width=224):
         self.image_dir = image_dir
         self.label_dir = label_dir
@@ -46,9 +59,24 @@ class AugmentedKITTIDataset(Dataset):
         return image, mask
 
     def create_label_image(self, label_path, output_shape):
+        """
+        Create a class index mask from KITTI format label file
+
+        Args:
+        label_path (str): Path to label file
+        output_shape (tuple): Output image dimensions
+        mask (torch.Tensor): Class index mask
+        original_h, original_w (int): Original image dimensions
+        class_name (str): Object class name
+        class_idx (int): Object class index
+        x1, y1, x2, y2 (int): Bounding box coordinates
+        
+        Returns:
+        torch.Tensor: Class index mask
+        """
         mask = torch.zeros(output_shape, dtype=torch.long)
         try:
-            original_h, original_w = 375, 1242  # KITTI image dimensions
+            original_h, original_w = 375, 1242 
             with open(label_path, 'r') as f:
                 for line in f:
                     parts = line.strip().split(' ')
@@ -61,8 +89,6 @@ class AugmentedKITTIDataset(Dataset):
                     
                     class_idx = self.class_mapping[class_name]
                     x1, y1, x2, y2 = map(float, parts[4:8])
-                    
-                    # Scale coordinates
                     x1 = int(x1 * self.img_width / original_w)
                     y1 = int(y1 * self.img_height / original_h)
                     x2 = int(x2 * self.img_width / original_w)
