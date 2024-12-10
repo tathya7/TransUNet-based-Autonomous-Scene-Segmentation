@@ -14,7 +14,7 @@ This project implements automatic scene segmentation using  deep learning archit
 
 ## To run the scripts
 
-### Requirements 
+### Requirements - Libraries
 ```
 python==3.12.0
 torch>=1.10.0
