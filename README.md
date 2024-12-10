@@ -28,7 +28,7 @@ This project implements automatic scene segmentation using  deep learning archit
 ├── train/
 |   ├──train_UNET_Cnn.py               # Training UNET CNN script
 |   ├──train_Transunet.py              # Training TransUNET script
-|   ├── train_sswinUNET.py               # Training SwinTransUNET script
+|   ├── train_swinUNET.py               # Training SwinTransUNET script
 ├── train_parallel.sh # Bash Script for traininf
 ├── inference.py           # Inference script
 ├── requirements.txt       # Dependency list
@@ -94,7 +94,14 @@ tail -f logs/transunet/training.log
 tail -f logs/swinunet/training.log
 ```
 
+**5. If required, individual training**
+```
+1. cd train
+2. python train_UNET_Cnn.py  # FOR UNET CNN
+3. python train_Transunet.py  # FOR TRANSFORMER UNET
+4. python train_swinUNET.py  # FOR SWIN-TRANSFORMER UNET
 
+```
 
 
 
