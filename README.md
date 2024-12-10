@@ -6,9 +6,10 @@ This project implements automatic scene segmentation using  deep learning archit
 
 ### Key Features 
 
-Implements traditional UNET for pixel-wise segmentation.
-Integrates Transformer-UNET to enhance global feature learning.
-Leverages Swin Transformer UNET for hierarchical and efficient segmentation.
-Supports training and inference on custom datasets.
-GPU acceleration for faster computations.
+- **Implements traditional UNET** for pixel-wise segmentation.
+- **Integrates Transformer-UNET** to enhance global feature learning.
+- **Leverages Swin Transformer UNET** for hierarchical and efficient segmentation.
+- **Supports training and inference** on custom datasets.
+- **GPU acceleration** for faster computations.
+
 
