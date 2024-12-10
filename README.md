@@ -12,4 +12,19 @@ This project implements automatic scene segmentation using  deep learning archit
 - **Supports training and inference** on custom datasets.
 - **GPU acceleration** for faster computations.
 
+### File Structure
+
+```
+├── data/                  # Dataset directory
+├── models/                # Model architectures
+│   ├── unet.py
+│   ├── transformer_unet.py
+│   └── swin_unet.py
+├── utils/                 # Utility scripts
+├── train.py               # Training script
+├── inference.py           # Inference script
+├── requirements.txt       # Dependency list
+└── README.md              # Project documentation
+
+```
 
