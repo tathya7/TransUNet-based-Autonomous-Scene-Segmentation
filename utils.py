@@ -7,15 +7,29 @@ from torchvision import transforms
 from albumentations.pytorch import ToTensorV2
 import numpy as np
 from tqdm import tqdm
-
+import matplotlib.pyplot as plt
 
 
 def save_predictions_with_metrics(images, masks, outputs, metrics, epoch, batch_idx, save_dir, num_classes):
+    """
+    Save predictions with metrics as an image.
+
+    Args:
+        images: Input images
+        masks: Ground truth masks
+        outputs: Model predictions
+        metrics: Dictionary of metrics
+        epoch: Current epoch
+        batch_idx: Current batch index
+        save_dir: Directory to save the images
+        num_classes: Number of classes in the dataset
+
+    Returns:
+        None
+    """
     with torch.no_grad():
         pred = outputs.argmax(dim=1)
         fig, axes = plt.subplots(2, 2, figsize=(15, 10))
-        
-
         img_display = images[0].cpu().permute(1, 2, 0).numpy()
         img_display = img_display * np.array([0.229, 0.224, 0.225]) + np.array([0.485, 0.456, 0.406])
         axes[0, 0].imshow(np.clip(img_display, 0, 1))
@@ -46,6 +60,17 @@ def save_predictions_with_metrics(images, masks, outputs, metrics, epoch, batch_
 
 
 def calculate_class_weights(dataset, num_classes, batch_size=32):
+    """
+    Calculate class weights for a dataset.
+
+    Args:
+        dataset: Dataset object
+        num_classes: Number of classes
+        batch_size: Batch size for DataLoader
+    
+    Returns:
+        Class weights
+    """
     print("Calculating class weights...")
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
     
@@ -65,11 +90,14 @@ def calculate_class_weights(dataset, num_classes, batch_size=32):
     return weights
 
 class MetricTracker:
+    """Class to track metrics during training and validation."""
     def __init__(self, num_classes):
+        """Initialize the metric values."""
         self.num_classes = num_classes
         self.reset()
     
     def reset(self):
+        """Reset all metrics."""
         self.dice_scores = []
         self.iou_scores = []
         self.f1_scores = []
@@ -77,6 +105,7 @@ class MetricTracker:
         self.class_ious = [[] for _ in range(self.num_classes)]
     
     def update(self, pred, target):
+        """Update the metrics with the new predictions and targets."""
         dice = self.calculate_dice(pred, target)
         iou = self.calculate_iou(pred, target)
         f1 = self.calculate_f1(pred, target)
@@ -99,6 +128,7 @@ class MetricTracker:
                 self.class_ious[class_idx].append(class_iou)
     
     def get_metrics(self):
+        """Calculate and return the metrics."""
         miou = np.mean([np.mean(class_iou) if len(class_iou) > 0 else 0 for class_iou in self.class_ious])
         return {
             'dice_mean': np.mean(self.dice_scores) if self.dice_scores else 0,
@@ -111,6 +141,20 @@ class MetricTracker:
 
     @staticmethod
     def calculate_dice(pred, target):
+        """
+        Calculate the Dice score for the given predictions and targets.
+
+        Args:
+            pred: Predictions
+            target: Ground truth targets
+            dice = (2 * intersection + smooth) / (union + smooth) 
+            smooth = 1e-5, constant to avoid division by zero
+            union = sum of pred and target
+            intersection = sum of pred and target
+
+        Returns:
+            Dice score
+        """
         smooth = 1e-5
         intersection = torch.sum(pred * target)
         union = torch.sum(pred) + torch.sum(target)
@@ -119,6 +163,20 @@ class MetricTracker:
     
     @staticmethod
     def calculate_iou(pred, target):
+        """
+        Calculate the IoU score for the given predictions and targets.
+
+        Args:
+            pred: Predictions
+            target: Ground truth targets
+            iou = (intersection + smooth) / (union + smooth)
+            smooth = 1e-5, constant to avoid division by zero
+            union = sum of pred and target
+            intersection = sum of pred and target
+        
+        Returns:
+            IoU score
+        """
         smooth = 1e-5
         intersection = torch.sum(pred * target)
         union = torch.sum(pred) + torch.sum(target) - intersection
@@ -127,6 +185,23 @@ class MetricTracker:
     
     @staticmethod
     def calculate_f1(pred, target):
+        """
+        Calculate the F1 score for the given predictions and targets.
+
+        Args:
+            pred: Predictions
+            target: Ground truth targets
+            f1 = 2 * (precision * recall) / (precision + recall)
+            precision = (true_positives + smooth) / (true_positives + false_positives + smooth)
+            recall = (true_positives + smooth) / (true_positives + false_negatives + smooth)
+            smooth = 1e-5, constant to avoid division by zero
+            true_positives = sum of pred and target
+            false_positives = sum of pred and not target
+            false_negatives = sum of not pred and target
+        
+        Returns:
+            F1 score
+        """
         smooth = 1e-5
         true_positives = torch.sum(pred * target)
         false_positives = torch.sum(pred * (1 - target))
@@ -140,13 +215,35 @@ class MetricTracker:
     
     @staticmethod
     def calculate_dice_overlap(pred, target):
+        """
+        Calculate the Dice overlap percentage for the given predictions and targets.
+
+        Args:
+            pred: Predictions
+            target: Ground truth targets
+            overlap = (2 * intersection + smooth) / (sum of pred and target + smooth) * 100
+            smooth = 1e-5, constant to avoid division by zero
+            intersection = sum of pred and target
+        
+        Returns:
+            Dice overlap percentage
+        """
         smooth = 1e-5
         intersection = torch.sum(pred * target)
         overlap = (2. * intersection + smooth) / (torch.sum(pred) + torch.sum(target) + smooth) * 100
         return overlap.item()
 
 def plot_metrics(metrics_history, save_dir):
-    """Plot and save all metrics history."""
+    """
+    Plot all metrics from the history.
+
+    Args:
+        metrics_history: Dictionary containing metrics
+        save_dir: Directory to save the plots
+    
+    Returns:
+        None
+    """
     metrics_to_plot = [
         ('loss', 'Loss'),
         ('dice_mean', 'Dice Score'),
@@ -169,7 +266,16 @@ def plot_metrics(metrics_history, save_dir):
         plt.close()
 
 def save_metric_values(metrics_history, save_dir):
-    """Save all metric values to separate text files."""
+    """
+    Save metric values to a text file.
+
+    Args:
+        metrics_history: Dictionary containing metrics
+        save_dir: Directory to save the text files
+    
+    Returns:
+        None
+    """
     metrics_to_save = [
         'loss', 'dice_mean', 'iou_mean', 'f1_mean', 
         'dice_overlap_mean', 'miou'
@@ -183,7 +289,17 @@ def save_metric_values(metrics_history, save_dir):
                        f"{metrics_history[f'val_{metric}'][epoch]}\n")
 
 def save_per_class_iou(per_class_iou_history, num_classes, save_dir):
-    """Save per-class IoU values."""
+    """
+    Save per-class IoU values to a text file.
+
+    Args:
+        per_class_iou_history: List containing per-class IoU values
+        num_classes: Number of classes
+        save_dir: Directory to save the text file
+    
+    Returns:
+        None
+    """
     with open(f'{save_dir}/per_class_iou_values.txt', 'w') as f:
         f.write("Epoch," + ",".join([f"Class_{i}" for i in range(num_classes)]) + "\n")
         for epoch, class_ious in enumerate(per_class_iou_history):
