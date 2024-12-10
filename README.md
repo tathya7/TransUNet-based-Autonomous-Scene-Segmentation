@@ -12,6 +12,20 @@ This project implements automatic scene segmentation using  deep learning archit
 - **Supports training and inference** on custom datasets.
 - **GPU acceleration** for faster computations.
 
+## To run the scripts
+
+### Requirements 
+```
+python==3.12.0
+torch>=1.10.0
+albumentations>=1.0.0
+albumentations[imgaug]
+numpy>=1.21.0
+opencv-python>=4.5.0
+matplotlib>=3.4.0
+tqdm>=4.60.0
+```
+
 ### Dataset
 
 ```
