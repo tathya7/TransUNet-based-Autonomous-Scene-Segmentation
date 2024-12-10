@@ -12,6 +12,28 @@ This project implements automatic scene segmentation using  deep learning archit
 - **Supports training and inference** on custom datasets.
 - **GPU acceleration** for faster computations.
 
+### File Structure
+
+```
+├── data/     
+├── networks/              
+│   ├── swin_transformer_unet_skip_expand_decoder_sys.py
+│   ├── UNet.py
+│   ├── UNetparts.py
+|   ├── vision_transformer.py
+|   ├── vit_segs_config.py
+|   ├── vit_segs_modelling.py
+|   ├── vit_segs_modelling_resnet_skip.py
+├── utils.py
+├── train_UNET_Cnn.py               # Training UNET CNN script
+├── train_Transunet.py              # Training TransUNET script
+├── train_sswinUNET.py               # Training SwinTransUNET script
+├── inference.py           # Inference script
+├── requirements.txt       # Dependency list
+└── README.md              # Project documentation
+
+```
+
 ## To run the scripts
 
 ### Requirements - Libraries
@@ -39,25 +61,36 @@ print("Path to model files:", path)
 **On the Terminal, this code will depict the Path to the dataset:**
 
 
-### File Structure
+### Command Line Instructions to run 
+##INSTALL CONDA/MINICONDA and follow the below process -
+**1. Activate Conda Environment**
 
 ```
-├── data/     
-├── networks/              
-│   ├── swin_transformer_unet_skip_expand_decoder_sys.py
-│   ├── UNet.py
-│   ├── UNetparts.py
-|   ├── vision_transformer.py
-|   ├── vit_segs_config.py
-|   ├── vit_segs_modelling.py
-|   ├── vit_segs_modelling_resnet_skip.py
-├── utils.py
-├── train_UNET_Cnn.py               # Training UNET CNN script
-├── train_Transunet.py              # Training TransUNET script
-├── train_sswinUNET.py               # Training SwinTransUNET script
-├── inference.py           # Inference script
-├── requirements.txt       # Dependency list
-└── README.md              # Project documentation
+conda activate YOUR_ENV
+```
+
+**2. Install all the dependencies**
 
 ```
+pip install requirements.txt
+```
+
+**3. For running Bash File**
+
+```
+chmod +x train_parallel.sh
+./train_parallel.sh
+```
+
+**4.Visualizing Bash file logs**
+
+```
+tail -f logs/unet/training.log
+tail -f logs/transunet/training.log
+tail -f logs/swinunet/training.log
+```
+
+
+
+
 
