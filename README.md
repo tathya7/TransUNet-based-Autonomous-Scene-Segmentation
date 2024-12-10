@@ -25,9 +25,11 @@ This project implements automatic scene segmentation using  deep learning archit
 |   ├── vit_segs_modelling.py
 |   ├── vit_segs_modelling_resnet_skip.py
 ├── utils.py
-├── train_UNET_Cnn.py               # Training UNET CNN script
-├── train_Transunet.py              # Training TransUNET script
-├── train_sswinUNET.py               # Training SwinTransUNET script
+├── train/
+|   ├──train_UNET_Cnn.py               # Training UNET CNN script
+|   ├──train_Transunet.py              # Training TransUNET script
+|   ├── train_sswinUNET.py               # Training SwinTransUNET script
+├── train_parallel.sh # Bash Script for traininf
 ├── inference.py           # Inference script
 ├── requirements.txt       # Dependency list
 └── README.md              # Project documentation
@@ -84,7 +86,7 @@ chmod +x train_parallel.sh
 ./train_parallel.sh
 ```
 
-**4.Visualizing Bash file logs**
+**4. Visualizing Bash file logs**
 
 ```
 tail -f logs/unet/training.log
