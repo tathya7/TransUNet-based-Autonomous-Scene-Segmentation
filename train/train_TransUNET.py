@@ -11,7 +11,7 @@ import cv2
 from tqdm import tqdm
 import os
 from networks.vit_seg_modeling import CONFIGS, VisionTransformer
-from AugmentedKITTIDataset_unet import AugmentedKITTIDataset
+from preprocessing.AugmentedKITTIDataset_unet import AugmentedKITTIDataset
 from utils import (
     calculate_class_weights,
     MetricTracker,

@@ -62,13 +62,13 @@ echo "TransUNet: GPU $GPU_TRANSUNET"
 echo "SwinUNet: GPU $GPU_SWINUNET"
 
 
-CUDA_VISIBLE_DEVICES=$GPU_UNET python unet_train.py \
+CUDA_VISIBLE_DEVICES=$GPU_UNET python train/unet_train.py \
     --save-dir "unet_results" > logs/unet/training.log 2>&1 &
-    
-CUDA_VISIBLE_DEVICES=$GPU_TRANSUNET python transunet_train.py \
+
+CUDA_VISIBLE_DEVICES=$GPU_TRANSUNET python train/transunet_train.py \
     --save-dir "transunet_results" > logs/transunet/training.log 2>&1 &
-    
-CUDA_VISIBLE_DEVICES=$GPU_SWINUNET python swinunet_train.py \
+
+CUDA_VISIBLE_DEVICES=$GPU_SWINUNET python train/swinunet_train.py \
     --save-dir "swinunet_results" > logs/swinunet/training.log 2>&1 &
 
 wait

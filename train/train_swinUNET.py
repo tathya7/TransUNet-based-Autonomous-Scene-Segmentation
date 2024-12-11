@@ -12,8 +12,8 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 import argparse
 from networks.vision_transformer import SwinUnet
-from config import get_config
-from AugmentedKITTIDataset import AugmentedKITTIDataset
+from configs.config import get_config
+from preprocessing.AugmentedKITTIDataset import AugmentedKITTIDataset
 from utils import (
     calculate_class_weights, 
     MetricTracker, 

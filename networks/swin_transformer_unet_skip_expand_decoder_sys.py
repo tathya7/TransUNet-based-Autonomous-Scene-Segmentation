@@ -6,71 +6,157 @@ from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 
 
 class MoEFFNGating(nn.Module):
+    """
+    MoEFFNGating class that implements a gating mechanism with multiple experts.
+    """
     def __init__(self, dim, hidden_dim, num_experts):
+        """
+        Initializes the MoEFFNGating model with a gating network and a list of experts.
+        
+        Parameters:
+        - dim (int): The input feature dimension.
+        - hidden_dim (int): The hidden dimension for the experts.
+        - num_experts (int): Number of expert networks.
+        """
         super(MoEFFNGating, self).__init__()
+        
+        # Gating network that produces weight for each expert
         self.gating_network = nn.Linear(dim, dim)
+        
+        # List of experts (each being a 2-layer MLP)
         self.experts = nn.ModuleList([nn.Sequential(
-            nn.Linear(dim, hidden_dim),
-            nn.GELU(),
-            nn.Linear(hidden_dim, dim)) for _ in range(num_experts)])
+            nn.Linear(dim, hidden_dim),  # First layer
+            nn.GELU(),                   # Activation function
+            nn.Linear(hidden_dim, dim))  # Second layer
+            for _ in range(num_experts)])
 
     def forward(self, x):
+        """
+        Forward pass through the gating network and experts.
+        
+        Parameters:
+        - x (Tensor): Input tensor with shape (batch_size, dim)
+        
+        Returns:
+        - outputs (Tensor): Weighted sum of expert outputs.
+        """
+        # Compute gating weights using the gating network
         weights = self.gating_network(x)
+        
+        # Apply softmax to obtain probabilities
         weights = torch.nn.functional.softmax(weights, dim=-1)
+        
+        # Get outputs from all experts
         outputs = [expert(x) for expert in self.experts]
+        
+        # Stack expert outputs
         outputs = torch.stack(outputs, dim=0)
+        
+        # Apply gating weights to expert outputs and sum them
         outputs = (weights.unsqueeze(0) * outputs).sum(dim=0)
+        
         return outputs
 
 
 class Mlp(nn.Module):
+    """
+    Simple Multi-layer Perceptron (MLP) class with an optional dropout layer.
+    """
     def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0.):
+        """
+        Initializes the MLP model.
+        
+        Parameters:
+        - in_features (int): Number of input features.
+        - hidden_features (int, optional): Number of hidden features. Defaults to `in_features`.
+        - out_features (int, optional): Number of output features. Defaults to `in_features`.
+        - act_layer (nn.Module, optional): Activation layer to use (default is GELU).
+        - drop (float, optional): Dropout probability (default is 0).
+        """
         super().__init__()
+        
+        # Set default values for hidden and output features if not provided
         out_features = out_features or in_features
         hidden_features = hidden_features or in_features
+        
+        # Define the layers of the MLP
         self.fc1 = nn.Linear(in_features, hidden_features)
-        self.act = act_layer()
+        self.act = act_layer()  # Activation layer
         self.fc2 = nn.Linear(hidden_features, out_features)
-        self.drop = nn.Dropout(drop)
+        self.drop = nn.Dropout(drop)  # Dropout layer
 
     def forward(self, x):
+        """
+        Forward pass through the MLP model.
+        
+        Parameters:
+        - x (Tensor): Input tensor
+        
+        Returns:
+        - x (Tensor): Output tensor after passing through the MLP
+        """
+        # Pass through the first linear layer and apply activation
         x = self.fc1(x)
         x = self.act(x)
+        
+        # Apply dropout
         x = self.drop(x)
+        
+        # Pass through the second linear layer
         x = self.fc2(x)
+        
+        # Apply dropout again
         x = self.drop(x)
+        
         return x
 
 
 def window_partition(x, window_size):
     """
-    Args:
-        x: (B, H, W, C)
-        window_size (int): window size
-
+    Partitions an image tensor into smaller windows of the specified size.
+    
+    Parameters:
+    - x (Tensor): Input tensor of shape (B, H, W, C), where B is batch size, 
+      H is height, W is width, and C is the number of channels.
+    - window_size (int): The size of the square windows to partition the image into.
+    
     Returns:
-        windows: (num_windows*B, window_size, window_size, C)
+    - windows (Tensor): A tensor containing the smaller windows.
     """
     B, H, W, C = x.shape
+    
+    # Reshape the input tensor to group the windows
     x = x.view(B, H // window_size, window_size, W // window_size, window_size, C)
+    
+    # Permute the dimensions to organize windows and return as a flattened tensor
     windows = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(-1, window_size, window_size, C)
+    
     return windows
 
 
 def window_reverse(windows, window_size, H, W):
     """
-    Args:
-        windows: (num_windows*B, window_size, window_size, C)
-        window_size (int): Window size
-        H (int): Height of image
-        W (int): Width of image
-
+    Reconstructs an image from smaller windows back to its original shape.
+    
+    Parameters:
+    - windows (Tensor): Tensor of shape (num_windows*B, window_size, window_size, C), 
+      where num_windows is the total number of windows.
+    - window_size (int): The size of the square windows.
+    - H (int): The height of the original image.
+    - W (int): The width of the original image.
+    
     Returns:
-        x: (B, H, W, C)
+    - x (Tensor): Reconstructed image tensor of shape (B, H, W, C).
     """
+    # Calculate batch size B from the number of windows and image dimensions
     B = int(windows.shape[0] / (H * W / window_size / window_size))
+    
+    # Reshape the windows back to the original image layout
     x = windows.view(B, H // window_size, W // window_size, window_size, window_size, -1)
+    
+    # Permute the dimensions to restore the original shape and return
     x = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(B, H, W, -1)
+    
     return x
 
 
@@ -350,25 +436,66 @@ class PatchMerging(nn.Module):
 
 
 class PatchExpand(nn.Module):
+    """
+    PatchExpand class that expands the input features by applying a linear transformation
+    and then reshapes the feature map. This is often used in vision transformers or similar models.
+    """
     def __init__(self, input_resolution, dim, dim_scale=2, norm_layer=nn.LayerNorm):
+        """
+        Initializes the PatchExpand module.
+        
+        Parameters:
+        - input_resolution (tuple): The height and width of the input feature map (H, W).
+        - dim (int): The input feature dimension (C).
+        - dim_scale (int, optional): The scaling factor for the dimension (default is 2). If 2, 
+          the `expand` layer is applied. If not, an identity function is used.
+        - norm_layer (nn.Module, optional): The normalization layer to use (default is LayerNorm).
+        """
         super().__init__()
-        self.input_resolution = input_resolution
-        self.dim = dim
+        
+        self.input_resolution = input_resolution  # (H, W)
+        self.dim = dim  # Input feature dimension
+        
+        # If dim_scale is 2, apply a linear transformation to double the dimension; else use identity.
         self.expand = nn.Linear(dim, 2 * dim, bias=False) if dim_scale == 2 else nn.Identity()
+        
+        # Normalization layer
         self.norm = norm_layer(dim // dim_scale)
 
     def forward(self, x):
         """
-        x: B, H*W, C
+        Forward pass through the PatchExpand layer.
+        
+        Parameters:
+        - x (Tensor): Input tensor of shape (B, H*W, C), where:
+          - B: Batch size
+          - H: Height of the input feature map
+          - W: Width of the input feature map
+          - C: Input feature dimension
+        
+        Returns:
+        - x (Tensor): Output tensor after expansion and normalization, shape (B, H*W, C//4).
         """
-        H, W = self.input_resolution
+        H, W = self.input_resolution  # Get the height and width of the input feature map
+        
+        # Apply the expansion layer if needed (if dim_scale == 2, this will double the feature dimension)
         x = self.expand(x)
-        B, L, C = x.shape
-        assert L == H * W, "input feature has wrong size"
-
+        
+        B, L, C = x.shape  # Get batch size (B), sequence length (L), and feature dimension (C)
+        
+        # Ensure that the sequence length matches H * W (height * width of the input)
+        assert L == H * W, "Input feature map has the wrong size."
+        
+        # Reshape the input tensor into a 4D shape: (B, H, W, C)
         x = x.view(B, H, W, C)
-        x = rearrange(x, 'b h w (p1 p2 c)-> b (h p1) (w p2) c', p1=2, p2=2, c=C // 4)
+        
+        # Rearrange the tensor into a new shape with patch expansion (p1=2, p2=2 means we're expanding by a factor of 2)
+        x = rearrange(x, 'b h w (p1 p2 c) -> b (h p1) (w p2) c', p1=2, p2=2, c=C // 4)
+        
+        # Reshape again to combine the patches (now with reduced channels)
         x = x.view(B, -1, C // 4)
+        
+        # Apply the normalization layer
         x = self.norm(x)
 
         return x
