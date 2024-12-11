@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 import os
 from networks.UNet import IUNet
-from AugmentedKITTIDataset_unet import AugmentedKITTIDataset
+from preprocessing.AugmentedKITTIDataset_unet import AugmentedKITTIDataset
 from utils import (calculate_class_weights,
                     MetricTracker,
                     save_metric_values,
