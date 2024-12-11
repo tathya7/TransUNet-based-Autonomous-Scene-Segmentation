@@ -15,7 +15,9 @@ This project implements automatic scene segmentation using  deep learning archit
 ## File Structure
 
 ```
-├── data/     
+├── configs/
+|   ├── swin_tiny_patch4_window7_224_lite.yaml
+|   ├── config.py
 ├── networks/              
 │   ├── swin_transformer_unet_skip_expand_decoder_sys.py
 │   ├── UNet.py
@@ -24,12 +26,15 @@ This project implements automatic scene segmentation using  deep learning archit
 |   ├── vit_segs_config.py
 |   ├── vit_segs_modelling.py
 |   ├── vit_segs_modelling_resnet_skip.py
-├── utils.py
+├── preprocessing/
+|   ├── AugmentedKITTIDataset_unet.py # data preprocess for UNet
+|   ├── AugmentedKITTIDataset.py   # data preprocess for transUNet and swin-UNet
 ├── train/
 |   ├──train_UNET_Cnn.py               # Training UNET CNN script
 |   ├──train_Transunet.py              # Training TransUNET script
 |   ├── train_swinUNET.py               # Training SwinTransUNET script
-├── train_parallel.sh # Bash Script for traininf
+├── utils.py
+├── train_parallel.sh # Bash Script for training
 ├── inference.py           # Inference script
 ├── requirements.txt       # Dependency list
 └── README.md              # Project documentation
