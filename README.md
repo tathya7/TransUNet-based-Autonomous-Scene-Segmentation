@@ -111,7 +111,7 @@ tail -f logs/swinunet/training.log
 ## REULTS 
 
 ### 1.
-![Alt text](relative%20Images/TRaining_Swin_UNET.png?raw=true "Training Result UNET")
+![Alt text](/images/TRaining_Swin_UNET.png)
 
 
 
