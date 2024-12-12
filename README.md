@@ -111,7 +111,7 @@ tail -f logs/swinunet/training.log
 ## REULTS 
 
 ### 1.
-![Alt text](./images/TRaining_Swin_UNET.png)
+![Alt text](images/TRaining_Swin_UNET.png)
 
 
 
