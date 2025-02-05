@@ -1,4 +1,4 @@
-# Automatic Scene Segmentation using UNET architectures. 
+# TransUNet Based Autonomous Vehicle Scene Segmentation
 
 
 ## Overview 
