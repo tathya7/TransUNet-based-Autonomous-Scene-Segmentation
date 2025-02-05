@@ -110,16 +110,6 @@ tail -f logs/swinunet/training.log
 
 ## RESULTS 
 
-### TRAINING 
-***1. SWIN UNET***
-![Training Swin UNET](Images/TRaining_Swin_UNET.png)
-
-***2. UNET CNN***
-![Training TRANS UNET](Images/Training_Results_TU.png)
-
-***3. TRANS UNET***
-![Training UNET CNN](Images/Training_Results_UNET.png)
-
 
 ### TESTING
 ***1. PREDICTION 1***
